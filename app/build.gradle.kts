@@ -33,11 +33,13 @@ android {
         // Set KEYSTORE_PASS and KEY_PASS as environment variables in your CI pipeline and local shell.
         create("release") {
             storeFile = file("../fitai-release.jks")
-            storePassword = System.getenv("KEYSTORE_PASS")
-                ?: error("KEYSTORE_PASS environment variable is not set. Set it before building a release.")
+            // PKCS12 keystores use a single password for both store and key.
+        // Set KEYSTORE_PASS to the value in C:\Users\Suriya Sittharth\FitAI-Keys\CREDENTIALS.txt
+        storePassword = System.getenv("KEYSTORE_PASS")
+                ?: error("KEYSTORE_PASS environment variable is not set. See FitAI-Keys/CREDENTIALS.txt")
             keyAlias = "fitai"
-            keyPassword = System.getenv("KEY_PASS")
-                ?: error("KEY_PASS environment variable is not set. Set it before building a release.")
+            keyPassword = System.getenv("KEYSTORE_PASS")
+                ?: error("KEYSTORE_PASS environment variable is not set. See FitAI-Keys/CREDENTIALS.txt")
         }
     }
 
