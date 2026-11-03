@@ -28,9 +28,10 @@ import com.jsf.app.pravin.data.model.*
         Achievement::class,
         Reaction::class,
         Comment::class,
-        ServerRole::class
+        ServerRole::class,
+        RepFormRecord::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class FitnessDatabase : RoomDatabase() {
@@ -53,6 +54,7 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun reactionDao(): ReactionDao
     abstract fun commentDao(): CommentDao
     abstract fun serverRoleDao(): ServerRoleDao
+    abstract fun repFormRecordDao(): RepFormRecordDao
 
     companion object {
         @Volatile private var INSTANCE: FitnessDatabase? = null
@@ -357,6 +359,23 @@ abstract class FitnessDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `rep_form_records` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `sessionId` INTEGER NOT NULL,
+                        `repNumber` INTEGER NOT NULL,
+                        `exerciseType` TEXT NOT NULL,
+                        `formErrors` TEXT NOT NULL,
+                        `repScore` REAL NOT NULL,
+                        `timestamp` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_rep_form_records_sessionId` ON `rep_form_records` (`sessionId`)")
+            }
+        }
+
         fun getInstance(context: Context): FitnessDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -364,7 +383,7 @@ abstract class FitnessDatabase : RoomDatabase() {
                     FitnessDatabase::class.java,
                     "fitness_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build().also { INSTANCE = it }
             }
     }

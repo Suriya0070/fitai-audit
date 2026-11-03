@@ -17,6 +17,9 @@ class FirestoreCommunityDataSource {
     private val channels get() = fs.collection("channels")
     private val messages get() = fs.collection("messages")
     private val members get() = fs.collection("server_members")
+    private val posts get() = fs.collection("posts")
+    private val reactions get() = fs.collection("post_reactions")
+    private val comments get() = fs.collection("post_comments")
 
     // ── Servers ───────────────────────────────────────────────────────────────
 
@@ -127,6 +130,64 @@ class FirestoreCommunityDataSource {
 
     suspend fun updateMemberRole(serverId: String, userId: String, role: String) {
         members.document("${serverId}_${userId}").update("role", role).await()
+    }
+
+    // ── Posts ─────────────────────────────────────────────────────────────────
+
+    fun getPostsForChannel(channelId: String, limit: Int = 50): Flow<List<com.jsf.app.pravin.data.model.Post>> =
+        collectionFlow(
+            posts.whereEqualTo("channelId", channelId)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(limit.toLong())
+        ) { docs -> docs.mapNotNull { it.toPost() }.reversed() }
+
+    suspend fun savePost(post: com.jsf.app.pravin.data.model.Post) {
+        posts.document(post.id).set(post.toPostMap()).await()
+    }
+
+    suspend fun deletePost(postId: String) {
+        posts.document(postId).delete().await()
+    }
+
+    suspend fun incrementPostLike(postId: String, delta: Int) {
+        posts.document(postId)
+            .update("likeCount", com.google.firebase.firestore.FieldValue.increment(delta.toLong()))
+            .await()
+    }
+
+    suspend fun incrementPostComment(postId: String, delta: Int) {
+        posts.document(postId)
+            .update("commentCount", com.google.firebase.firestore.FieldValue.increment(delta.toLong()))
+            .await()
+    }
+
+    // ── Post Reactions ────────────────────────────────────────────────────────
+
+    fun getReactionsForPost(postId: String): Flow<List<com.jsf.app.pravin.data.model.Reaction>> =
+        collectionFlow(reactions.whereEqualTo("postId", postId)) { docs ->
+            docs.mapNotNull { it.toReaction() }
+        }
+
+    suspend fun addReaction(reaction: com.jsf.app.pravin.data.model.Reaction) {
+        val docId = "${reaction.postId}_${reaction.userId}_${reaction.emoji}"
+        reactions.document(docId).set(reaction.toReactionMap()).await()
+    }
+
+    suspend fun removeReaction(postId: String, userId: String, emoji: String) {
+        reactions.document("${postId}_${userId}_${emoji}").delete().await()
+    }
+
+    // ── Post Comments ─────────────────────────────────────────────────────────
+
+    fun getCommentsForPost(postId: String): Flow<List<com.jsf.app.pravin.data.model.Comment>> =
+        collectionFlow(
+            comments.whereEqualTo("postId", postId)
+                .orderBy("timestamp")
+                .limit(100)
+        ) { docs -> docs.mapNotNull { it.toComment() } }
+
+    suspend fun saveComment(comment: com.jsf.app.pravin.data.model.Comment) {
+        comments.document(comment.id).set(comment.toCommentMap()).await()
     }
 
     // ── Flow helpers ──────────────────────────────────────────────────────────
@@ -252,5 +313,64 @@ class FirestoreCommunityDataSource {
     private fun ServerMember.toMap() = mapOf(
         "serverId" to serverId, "userId" to userId, "role" to role,
         "joinedAt" to joinedAt, "nickname" to nickname, "isActive" to isActive
+    )
+
+    private fun DocumentSnapshot.toPost() = runCatching {
+        if (!exists()) return@runCatching null
+        com.jsf.app.pravin.data.model.Post(
+            id = id,
+            channelId = getString("channelId") ?: return@runCatching null,
+            serverId = getString("serverId") ?: "",
+            authorId = getString("authorId") ?: "",
+            type = getString("type") ?: com.jsf.app.pravin.data.model.Post.PostType.TEXT,
+            content = getString("content") ?: "",
+            mediaUrl = getString("mediaUrl") ?: "",
+            workoutSessionId = getLong("workoutSessionId") ?: 0L,
+            exerciseType = getString("exerciseType") ?: "",
+            repCount = getLong("repCount")?.toInt() ?: 0,
+            totalScore = getDouble("totalScore")?.toFloat() ?: 0f,
+            likeCount = getLong("likeCount")?.toInt() ?: 0,
+            commentCount = getLong("commentCount")?.toInt() ?: 0,
+            timestamp = getLong("timestamp") ?: 0L
+        )
+    }.getOrNull()
+
+    private fun DocumentSnapshot.toReaction() = runCatching {
+        if (!exists()) return@runCatching null
+        com.jsf.app.pravin.data.model.Reaction(
+            postId = getString("postId") ?: return@runCatching null,
+            userId = getString("userId") ?: "",
+            emoji = getString("emoji") ?: "",
+            timestamp = getLong("timestamp") ?: 0L
+        )
+    }.getOrNull()
+
+    private fun DocumentSnapshot.toComment() = runCatching {
+        if (!exists()) return@runCatching null
+        com.jsf.app.pravin.data.model.Comment(
+            id = id,
+            postId = getString("postId") ?: return@runCatching null,
+            authorId = getString("authorId") ?: "",
+            content = getString("content") ?: "",
+            timestamp = getLong("timestamp") ?: 0L,
+            likeCount = getLong("likeCount")?.toInt() ?: 0
+        )
+    }.getOrNull()
+
+    private fun com.jsf.app.pravin.data.model.Post.toPostMap() = mapOf(
+        "channelId" to channelId, "serverId" to serverId, "authorId" to authorId,
+        "type" to type, "content" to content, "mediaUrl" to mediaUrl,
+        "workoutSessionId" to workoutSessionId, "exerciseType" to exerciseType,
+        "repCount" to repCount, "totalScore" to totalScore,
+        "likeCount" to likeCount, "commentCount" to commentCount, "timestamp" to timestamp
+    )
+
+    private fun com.jsf.app.pravin.data.model.Reaction.toReactionMap() = mapOf(
+        "postId" to postId, "userId" to userId, "emoji" to emoji, "timestamp" to timestamp
+    )
+
+    private fun com.jsf.app.pravin.data.model.Comment.toCommentMap() = mapOf(
+        "postId" to postId, "authorId" to authorId, "content" to content,
+        "timestamp" to timestamp, "likeCount" to likeCount
     )
 }

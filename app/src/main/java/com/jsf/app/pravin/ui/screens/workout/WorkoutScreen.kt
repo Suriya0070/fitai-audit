@@ -42,6 +42,9 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.jsf.app.pravin.data.model.Achievement
 import com.jsf.app.pravin.domain.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import com.jsf.app.pravin.ui.components.ScoreGauge
 import com.jsf.app.pravin.ui.theme.*
 import java.util.concurrent.Executors
@@ -424,6 +427,7 @@ private fun ActiveWorkoutScreen(viewModel: WorkoutViewModel) {
     val envQuality by viewModel.environmentQuality.collectAsState()
     val sessionDuration by viewModel.sessionDuration.collectAsState()
     val selectedExercise by viewModel.selectedExercise.collectAsState()
+    val formErrors by viewModel.formErrors.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Top HUD
@@ -505,6 +509,44 @@ private fun ActiveWorkoutScreen(viewModel: WorkoutViewModel) {
             }
 
             Spacer(Modifier.height(8.dp))
+
+            // Real-time form feedback — shows the most severe error only to avoid clutter
+            val topError = formErrors.maxByOrNull { it.severity.ordinal }
+            AnimatedVisibility(
+                visible = topError != null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                topError?.let { error ->
+                    val (bg, fg) = when (error.severity) {
+                        FormError.Severity.MAJOR    -> Pair(RedDanger.copy(alpha = 0.2f), RedDanger)
+                        FormError.Severity.MODERATE -> Pair(OrangeWarning.copy(alpha = 0.15f), OrangeWarning)
+                        FormError.Severity.MINOR    -> Pair(CyanPrimary.copy(alpha = 0.12f), CyanPrimary)
+                    }
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = bg),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("⚠", fontSize = 14.sp)
+                            Text(
+                                error.message,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = fg,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
 
             // Fatigue/injury warning
             if (fatigueReport.injuryRisk > 0.3f) {

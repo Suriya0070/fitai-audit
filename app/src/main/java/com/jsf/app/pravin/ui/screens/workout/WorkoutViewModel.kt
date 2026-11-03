@@ -13,8 +13,12 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.analytics.logEvent
+import com.google.gson.Gson
 import com.jsf.app.pravin.data.db.FitnessDatabase
 import com.jsf.app.pravin.data.model.Achievement
+import com.jsf.app.pravin.data.model.RepFormRecord
 import com.jsf.app.pravin.data.model.WorkoutSession
 import com.jsf.app.pravin.data.preferences.UserPreferences
 import com.jsf.app.pravin.data.repository.FitnessRepository
@@ -40,12 +44,15 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val db = FitnessDatabase.getInstance(application)
     private val repository = FitnessRepository(db)
     private val prefs = UserPreferences(application)
+    private val analytics = FirebaseAnalytics.getInstance(application)
+    private val gson = Gson()
 
     val poseAnalyzer = PoseAnalyzer(application)
     private val scoreEngine = WorkoutScoreEngine()
     private val repCounter = RepCounter()
     private val envAnalyzer = EnvironmentAnalyzer()
     private val fatiguePredictor = FatiguePredictor()
+    private var formAnalyzer: ExerciseFormAnalyzer = NoOpFormAnalyzer()
 
     private val _workoutState = MutableStateFlow<WorkoutState>(WorkoutState.Idle)
     val workoutState: StateFlow<WorkoutState> = _workoutState.asStateFlow()
@@ -88,6 +95,14 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     private val _newAchievements = MutableStateFlow<List<Achievement>>(emptyList())
     val newAchievements: StateFlow<List<Achievement>> = _newAchievements.asStateFlow()
 
+    // Real-time form errors from the current frame — shown as an overlay during active workout
+    private val _formErrors = MutableStateFlow<List<FormError>>(emptyList())
+    val formErrors: StateFlow<List<FormError>> = _formErrors.asStateFlow()
+
+    // Per-rep form records collected during this session
+    private val sessionRepRecords = mutableListOf<RepFormRecord>()
+    private var lastRepScoreSnapshot = WorkoutScore()
+
     fun clearNewAchievements() { _newAchievements.value = emptyList() }
 
     init {
@@ -109,10 +124,23 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 fatiguePredictor.update(score.overall)
                 _fatigueReport.value = fatiguePredictor.predict()
 
+                val errors = formAnalyzer.analyze(poseResult)
+                _formErrors.value = errors
+
                 val repCompleted = repCounter.update(poseResult, _selectedExercise.value)
                 if (repCompleted) {
-                    _repCount.value = repCounter.getCount()
+                    val repNum = repCounter.getCount()
+                    _repCount.value = repNum
                     scoreEngine.onRepCompleted(time)
+                    lastRepScoreSnapshot = score
+                    val repRecord = RepFormRecord(
+                        sessionId = sessionStartTime,
+                        repNumber = repNum,
+                        exerciseType = _selectedExercise.value,
+                        formErrors = gson.toJson(errors),
+                        repScore = score.overall
+                    )
+                    sessionRepRecords.add(repRecord)
                 }
                 if (sessionScoreHistory.size >= MAX_SCORE_HISTORY) {
                     try { sessionScoreHistory.removeAt(0) } catch (_: Exception) {}
@@ -146,13 +174,20 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         repCounter.reset()
         fatiguePredictor.reset()
         sessionScoreHistory.clear()
+        sessionRepRecords.clear()
         completedSetReps.clear()
         setsCompleted = 0
         _repCount.value = 0
         _workoutScore.value = WorkoutScore()
         _fatigueReport.value = FatigueReport()
+        _formErrors.value = emptyList()
         _sessionDuration.value = 0
         sessionStartTime = System.currentTimeMillis()
+        formAnalyzer = ExerciseFormAnalyzer.forExercise(_selectedExercise.value)
+        analytics.logEvent(FirebaseAnalytics.Event.SELECT_CONTENT) {
+            param(FirebaseAnalytics.Param.CONTENT_TYPE, "workout_start")
+            param(FirebaseAnalytics.Param.ITEM_NAME, _selectedExercise.value)
+        }
 
         _workoutState.value = WorkoutState.Active
         timerJob?.cancel()
@@ -257,14 +292,23 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         )
 
         viewModelScope.launch {
-            repository.saveSession(session)
+            val savedId = repository.saveSession(session)
+            val savedSession = session.copy(id = savedId)
+            val repRecordsCopy = sessionRepRecords.map { it.copy(sessionId = savedId) }
+            repRecordsCopy.forEach { db.repFormRecordDao().insert(it) }
             val userId = prefs.currentUserId.first()
             if (userId.isNotEmpty()) {
                 val allSessions = repository.allSessions.first()
-                checkAndAwardAchievements(session, allSessions, userId)
+                checkAndAwardAchievements(savedSession, allSessions, userId)
             }
+            analytics.logEvent("workout_completed") {
+                param("exercise", savedSession.exerciseType)
+                param("reps", savedSession.repCount.toLong())
+                param("score", savedSession.totalScore.toLong())
+                param("duration_seconds", savedSession.durationSeconds.toLong())
+            }
+            _workoutState.value = WorkoutState.Summary(savedSession)
         }
-        _workoutState.value = WorkoutState.Summary(session)
     }
 
     private suspend fun checkAndAwardAchievements(
@@ -311,8 +355,10 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         _repCount.value = 0
         _workoutScore.value = WorkoutScore()
         _fatigueReport.value = FatigueReport()
+        _formErrors.value = emptyList()
         _sessionDuration.value = 0
         sessionScoreHistory.clear()
+        sessionRepRecords.clear()
         completedSetReps.clear()
         setsCompleted = 0
     }

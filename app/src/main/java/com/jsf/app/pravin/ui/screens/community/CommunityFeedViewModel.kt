@@ -10,6 +10,7 @@ import com.jsf.app.pravin.data.model.Comment
 import com.jsf.app.pravin.data.model.Post
 import com.jsf.app.pravin.data.model.Reaction
 import com.jsf.app.pravin.data.preferences.UserPreferences
+import com.jsf.app.pravin.data.remote.FirestoreCommunityDataSource
 import com.jsf.app.pravin.data.repository.CommunityRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -30,6 +31,7 @@ class CommunityFeedViewModel(
 
     private val db = FitnessDatabase.getInstance(application)
     private val communityRepo = CommunityRepository(db)
+    private val firestoreSource = FirestoreCommunityDataSource()
     private val prefs = UserPreferences(application)
 
     private val _uiState = MutableStateFlow(FeedUiState())
@@ -41,25 +43,42 @@ class CommunityFeedViewModel(
             _uiState.update { it.copy(currentUserId = uid) }
         }
 
+        // Firestore is the source of truth for posts — Room is kept as an offline cache.
+        viewModelScope.launch {
+            firestoreSource.getPostsForChannel(channelId)
+                .catch { android.util.Log.w("Feed", "Firestore posts error: ${it.message}") }
+                .collect { remotePosts ->
+                    // Upsert into Room for offline access
+                    remotePosts.forEach { db.postDao().upsertPost(it) }
+                    _uiState.update { it.copy(posts = remotePosts, isLoading = false) }
+                }
+        }
+
+        // Fall back to Room while Firestore is loading (or offline)
         viewModelScope.launch {
             db.postDao().getPostsForChannel(channelId)
-                .flatMapLatest { posts ->
-                    _uiState.update { it.copy(posts = posts, isLoading = false) }
-                    val postIds = posts.map { it.id }
-                    if (postIds.isEmpty()) {
-                        flowOf(Pair(emptyList<Reaction>(), emptyList<Comment>()))
-                    } else {
-                        combine(
-                            db.reactionDao().getReactionsForPosts(postIds),
-                            db.commentDao().getCommentsForPosts(postIds)
-                        ) { reactions, comments -> Pair(reactions, comments) }
+                .collect { localPosts ->
+                    if (_uiState.value.isLoading) {
+                        _uiState.update { it.copy(posts = localPosts, isLoading = false) }
                     }
                 }
-                .collect { (reactions, comments) ->
-                    val reactionsMap = reactions.groupBy { it.postId }
-                    val commentsMap = comments.groupBy { it.postId }
-                    _uiState.update { it.copy(reactionsMap = reactionsMap, commentsMap = commentsMap) }
-                }
+        }
+
+        // Reactions and comments: Firestore for connected users, Room for offline
+        viewModelScope.launch {
+            _uiState.flatMapLatest { state ->
+                val postIds = state.posts.map { it.id }
+                if (postIds.isEmpty()) flowOf(Pair(emptyList<Reaction>(), emptyList<Comment>()))
+                else combine(
+                    db.reactionDao().getReactionsForPosts(postIds),
+                    db.commentDao().getCommentsForPosts(postIds)
+                ) { reactions, comments -> Pair(reactions, comments) }
+            }.collect { (reactions, comments) ->
+                _uiState.update { it.copy(
+                    reactionsMap = reactions.groupBy { it.postId },
+                    commentsMap = comments.groupBy { it.postId }
+                ) }
+            }
         }
     }
 
@@ -79,7 +98,12 @@ class CommunityFeedViewModel(
                 exerciseType = exerciseType.trim(),
                 timestamp = System.currentTimeMillis()
             )
-            db.postDao().upsertPost(post)
+            // Write to Firestore first; the snapshot listener above will push it to Room.
+            if (uid.startsWith("local_")) {
+                db.postDao().upsertPost(post)
+            } else {
+                firestoreSource.savePost(post)
+            }
         }
     }
 
@@ -90,11 +114,18 @@ class CommunityFeedViewModel(
             if (existing != null) {
                 db.reactionDao().removeReaction(postId, uid, emoji)
                 db.postDao().updateLikeCount(postId, -1)
+                if (!uid.startsWith("local_")) {
+                    firestoreSource.removeReaction(postId, uid, emoji)
+                    firestoreSource.incrementPostLike(postId, -1)
+                }
             } else {
-                db.reactionDao().insertReaction(
-                    Reaction(postId = postId, userId = uid, emoji = emoji)
-                )
+                val reaction = Reaction(postId = postId, userId = uid, emoji = emoji)
+                db.reactionDao().insertReaction(reaction)
                 db.postDao().updateLikeCount(postId, 1)
+                if (!uid.startsWith("local_")) {
+                    firestoreSource.addReaction(reaction)
+                    firestoreSource.incrementPostLike(postId, 1)
+                }
             }
         }
     }
@@ -112,6 +143,10 @@ class CommunityFeedViewModel(
             )
             db.commentDao().insertComment(comment)
             db.postDao().updateCommentCount(postId, 1)
+            if (!uid.startsWith("local_")) {
+                firestoreSource.saveComment(comment)
+                firestoreSource.incrementPostComment(postId, 1)
+            }
         }
     }
 

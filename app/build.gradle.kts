@@ -119,6 +119,10 @@ dependencies {
     implementation(libs.firebase.crashlytics.ktx)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
+    implementation(libs.firebase.messaging.ktx)
+    implementation(libs.firebase.analytics.ktx)
+    // Google Sign-In
+    implementation(libs.play.services.auth)
     // Coroutines Play Services (for Firebase .await())
     implementation(libs.kotlinx.coroutines.play.services)
     // WebRTC
