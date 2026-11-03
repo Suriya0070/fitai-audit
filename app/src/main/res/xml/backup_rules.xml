@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+        Exclude the Room database — it contains local workout history tied to this device.
+        Restoring it on a new device would pair sessions with the wrong account.
+    -->
+    <exclude domain="database" path="fitness_db" />
+    <exclude domain="database" path="fitness_db-shm" />
+    <exclude domain="database" path="fitness_db-wal" />
+
+    <!--
+        Exclude DataStore preferences — they contain the current user session ID.
+        Restoring them would silently sign in the wrong user on a new device.
+    -->
+    <exclude domain="file" path="datastore" />
+</full-backup-content>
