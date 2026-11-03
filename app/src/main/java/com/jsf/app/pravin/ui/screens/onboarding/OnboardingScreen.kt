@@ -1,6 +1,9 @@
 package com.jsf.app.pravin.ui.screens.onboarding
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -31,6 +35,9 @@ fun OnboardingScreen(
 ) {
     var page by remember { mutableIntStateOf(0) }
 
+    // Page 0 state
+    var role by remember { mutableStateOf("athlete") }
+
     // Page 1 state
     var name by remember { mutableStateOf("") }
     var age by remember { mutableStateOf("25") }
@@ -45,7 +52,12 @@ fun OnboardingScreen(
     var weeklyGoal by remember { mutableIntStateOf(3) }
 
     when (page) {
-        0 -> ProfilePage(
+        0 -> RolePage(
+            selectedRole = role,
+            onRoleChange = { role = it },
+            onNext = { page = 1 }
+        )
+        1 -> ProfilePage(
             name = name, onNameChange = { name = it },
             age = age, onAgeChange = { age = it },
             heightCm = heightCm, onHeightChange = { heightCm = it },
@@ -53,6 +65,7 @@ fun OnboardingScreen(
             fitnessLevel = fitnessLevel, onLevelChange = { fitnessLevel = it },
             gender = gender, onGenderChange = { gender = it },
             errorMessage = errorMessage,
+            onBack = { page = 0 },
             onNext = {
                 val ageInt = age.toIntOrNull()
                 val heightFloat = heightCm.toFloatOrNull()
@@ -67,15 +80,15 @@ fun OnboardingScreen(
                         errorMessage = "Please enter a valid weight (30–300 kg)"
                     else -> {
                         errorMessage = ""
-                        page = 1
+                        page = 2
                     }
                 }
             }
         )
-        1 -> GoalsPage(
+        2 -> GoalsPage(
             fitnessGoal = fitnessGoal, onGoalChange = { fitnessGoal = it },
             weeklyGoal = weeklyGoal, onWeeklyGoalChange = { weeklyGoal = it },
-            onBack = { page = 0 },
+            onBack = { page = 1 },
             onDone = {
                 onComplete(
                     UserProfile(
@@ -85,12 +98,132 @@ fun OnboardingScreen(
                         heightCm = heightCm.toFloatOrNull() ?: 170f,
                         weightKg = weightKg.toFloatOrNull() ?: 70f,
                         fitnessLevel = fitnessLevel,
-                        gender = gender
+                        gender = gender,
+                        role = role
                     ),
                     OnboardingGoals(fitnessGoal, weeklyGoal)
                 )
             }
         )
+    }
+}
+
+@Composable
+private fun RolePage(
+    selectedRole: String,
+    onRoleChange: (String) -> Unit,
+    onNext: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(LightBg)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("FitAI", fontSize = 42.sp, fontWeight = FontWeight.ExtraBold, color = CyanPrimary)
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { 0.33f },
+                modifier = Modifier.fillMaxWidth().height(4.dp),
+                color = CyanPrimary,
+                trackColor = LightBorder
+            )
+            Text("Step 1 of 3 — Your Role", fontSize = 11.sp, color = TextGray)
+
+            Spacer(Modifier.height(40.dp))
+            Text("How will you use FitAI?", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextDark, textAlign = TextAlign.Center)
+            Text("Choose your role to personalize your experience", fontSize = 13.sp, color = TextGray, textAlign = TextAlign.Center)
+
+            Spacer(Modifier.height(32.dp))
+
+            RoleCard(
+                emoji = "🏋️",
+                title = "I am Training",
+                subtitle = "Track my own workouts, get AI form feedback, monitor progress",
+                selected = selectedRole == "athlete",
+                onClick = { onRoleChange("athlete") }
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            RoleCard(
+                emoji = "🎓",
+                title = "I am a Trainer",
+                subtitle = "Manage clients, monitor their form & progress, send workout plans",
+                selected = selectedRole == "trainer",
+                onClick = { onRoleChange("trainer") }
+            )
+
+            Spacer(Modifier.height(40.dp))
+
+            Button(
+                onClick = onNext,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = DeepSpace)
+            ) {
+                Text("Continue", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoleCard(
+    emoji: String,
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) CyanPrimary else LightBorder,
+        label = "roleCardBorder"
+    )
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) CyanPrimary.copy(alpha = 0.08f) else LightCard,
+        label = "roleCardBg"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(bgColor)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(20.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(emoji, fontSize = 36.sp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (selected) CyanPrimary else TextDark
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, fontSize = 13.sp, color = TextGray, lineHeight = 18.sp)
+            }
+            if (selected) {
+                RadioButton(
+                    selected = true,
+                    onClick = null,
+                    colors = RadioButtonDefaults.colors(selectedColor = CyanPrimary)
+                )
+            }
+        }
     }
 }
 
@@ -103,6 +236,7 @@ private fun ProfilePage(
     fitnessLevel: String, onLevelChange: (String) -> Unit,
     gender: String, onGenderChange: (String) -> Unit,
     errorMessage: String,
+    onBack: () -> Unit = {},
     onNext: () -> Unit
 ) {
     val fitnessLevels = listOf("Beginner", "Intermediate", "Advanced")
@@ -132,12 +266,12 @@ private fun ProfilePage(
 
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { 0.5f },
+                progress = { 0.66f },
                 modifier = Modifier.fillMaxWidth().height(4.dp),
                 color = CyanPrimary,
                 trackColor = LightBorder
             )
-            Text("Step 1 of 2 — Your Profile", fontSize = 11.sp, color = TextGray)
+            Text("Step 2 of 3 — Your Profile", fontSize = 11.sp, color = TextGray)
 
             Spacer(Modifier.height(24.dp))
             Text("Let's set up your profile", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextDark)
@@ -214,7 +348,11 @@ private fun ProfilePage(
             ) {
                 Text("Next — Set Your Goals", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
             }
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onBack) {
+                Text("Back", color = TextGray, fontSize = 14.sp)
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -256,7 +394,7 @@ private fun GoalsPage(
                 color = CyanPrimary,
                 trackColor = LightBorder
             )
-            Text("Step 2 of 2 — Your Goals", fontSize = 11.sp, color = TextGray)
+            Text("Step 3 of 3 — Your Goals", fontSize = 11.sp, color = TextGray)
 
             Spacer(Modifier.height(32.dp))
             Text("What's your main goal?", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextDark)

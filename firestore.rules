@@ -148,6 +148,62 @@ service cloud.firestore {
       }
     }
 
+    // ── Workout sessions (synced for trainer access) ──────────────────────
+    match /workoutSessions/{sessionId} {
+      // Owner can read/write their own sessions
+      allow read, write: if isSignedIn() && sessionId.matches(request.auth.uid + '_.*');
+      // Trainers can read their clients' sessions (validated via trainer_clients)
+      allow read: if isSignedIn() &&
+        exists(/databases/$(database)/documents/trainer_clients/$(request.auth.uid + '_' + resource.data.userId)) &&
+        get(/databases/$(database)/documents/trainer_clients/$(request.auth.uid + '_' + resource.data.userId)).data.status == 'active';
+    }
+
+    // ── Trainer–client relationships ──────────────────────────────────────
+    match /trainer_clients/{relationId} {
+      // Trainers can read/write their own client relationships
+      allow read, create, update: if isSignedIn() && resource == null
+        ? request.resource.data.trainerId == request.auth.uid
+        : resource.data.trainerId == request.auth.uid;
+      // Clients can read their own trainer relationship
+      allow read: if isSignedIn() && resource.data.clientId == request.auth.uid;
+    }
+
+    // ── Trainer invites ────────────────────────────────────────────────────
+    match /trainer_invites/{inviteId} {
+      allow read, create: if isSignedIn() && (
+        resource == null
+          ? request.resource.data.trainerId == request.auth.uid
+          : resource.data.trainerId == request.auth.uid
+      );
+      // Anyone signed in can update status (accept/decline)
+      allow update: if isSignedIn();
+    }
+
+    // ── Trainer alerts ─────────────────────────────────────────────────────
+    match /trainer_alerts/{alertId} {
+      allow read, create, update, delete: if isSignedIn() &&
+        (resource == null
+          ? request.resource.data.trainerId == request.auth.uid
+          : resource.data.trainerId == request.auth.uid);
+    }
+
+    // ── Trainer notes ──────────────────────────────────────────────────────
+    match /trainer_notes/{noteId} {
+      allow read, create, update, delete: if isSignedIn() &&
+        (resource == null
+          ? request.resource.data.trainerId == request.auth.uid
+          : resource.data.trainerId == request.auth.uid);
+    }
+
+    // ── Client status snapshots ────────────────────────────────────────────
+    match /client_status_snapshots/{snapshotId} {
+      allow read, write: if isSignedIn() && (
+        resource == null
+          ? request.resource.data.trainerId == request.auth.uid
+          : resource.data.trainerId == request.auth.uid
+      );
+    }
+
     // ── Deny everything else ──────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

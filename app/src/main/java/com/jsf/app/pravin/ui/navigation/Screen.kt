@@ -39,4 +39,12 @@ sealed class Screen(val route: String) {
     object RepBattle : Screen("rep_battle/{serverId}") {
         fun createRoute(serverId: String) = "rep_battle/$serverId"
     }
+
+    // ── Trainer Platform ──────────────────────────────────────────────────
+    object TrainerDashboard : Screen("trainer_dashboard")
+    object TrainerProfileSetup : Screen("trainer_profile_setup")
+    object ClientInvite : Screen("client_invite")
+    object ClientDetail : Screen("client_detail/{clientId}") {
+        fun createRoute(clientId: String) = "client_detail/$clientId"
+    }
 }

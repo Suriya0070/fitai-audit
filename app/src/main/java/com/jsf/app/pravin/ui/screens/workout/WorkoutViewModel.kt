@@ -15,6 +15,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.logEvent
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import com.jsf.app.pravin.data.db.FitnessDatabase
 import com.jsf.app.pravin.data.model.Achievement
@@ -306,6 +307,25 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                 param("reps", savedSession.repCount.toLong())
                 param("score", savedSession.totalScore.toLong())
                 param("duration_seconds", savedSession.durationSeconds.toLong())
+            }
+            // Sync to Firestore so trainers can view client workout history
+            if (userId.isNotEmpty() && !userId.startsWith("local_")) {
+                runCatching {
+                    FirebaseFirestore.getInstance()
+                        .collection("workoutSessions")
+                        .document("${userId}_${savedId}")
+                        .set(mapOf(
+                            "userId" to userId,
+                            "sessionId" to savedId,
+                            "exerciseType" to savedSession.exerciseType,
+                            "durationSeconds" to savedSession.durationSeconds,
+                            "repCount" to savedSession.repCount,
+                            "totalScore" to savedSession.totalScore,
+                            "accuracyScore" to savedSession.accuracyScore,
+                            "formScore" to savedSession.accuracyScore,
+                            "timestamp" to savedSession.timestamp
+                        ))
+                }
             }
             _workoutState.value = WorkoutState.Summary(savedSession)
         }

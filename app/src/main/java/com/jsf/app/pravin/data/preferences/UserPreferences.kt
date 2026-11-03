@@ -16,6 +16,7 @@ class UserPreferences(private val context: Context) {
         val CURRENT_USER_ID = stringPreferencesKey("current_user_id")
         val FITNESS_GOAL = stringPreferencesKey("fitness_goal")
         val WEEKLY_GOAL_SESSIONS = intPreferencesKey("weekly_goal_sessions")
+        val USER_ROLE = stringPreferencesKey("user_role")
     }
 
     val isOnboardingDone: Flow<Boolean> = context.dataStore.data.map { it[ONBOARDING_DONE] ?: false }
@@ -23,6 +24,7 @@ class UserPreferences(private val context: Context) {
     val currentUserId: Flow<String> = context.dataStore.data.map { it[CURRENT_USER_ID] ?: "" }
     val fitnessGoal: Flow<String> = context.dataStore.data.map { it[FITNESS_GOAL] ?: "Stay Active" }
     val weeklyGoalSessions: Flow<Int> = context.dataStore.data.map { it[WEEKLY_GOAL_SESSIONS] ?: 3 }
+    val userRole: Flow<String> = context.dataStore.data.map { it[USER_ROLE] ?: "athlete" }
 
     suspend fun setOnboardingDone(done: Boolean) {
         context.dataStore.edit { it[ONBOARDING_DONE] = done }
@@ -42,5 +44,9 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setWeeklyGoalSessions(sessions: Int) {
         context.dataStore.edit { it[WEEKLY_GOAL_SESSIONS] = sessions }
+    }
+
+    suspend fun setUserRole(role: String) {
+        context.dataStore.edit { it[USER_ROLE] = role }
     }
 }

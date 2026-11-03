@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -49,6 +50,10 @@ import com.jsf.app.pravin.ui.screens.friends.FriendsScreen
 import com.jsf.app.pravin.ui.screens.challenge.RepBattleScreen
 import com.jsf.app.pravin.ui.screens.achievements.AchievementsScreen
 import com.jsf.app.pravin.data.repository.CommunityRepository
+import com.jsf.app.pravin.ui.screens.trainer.ClientDetailScreen
+import com.jsf.app.pravin.ui.screens.trainer.ClientInviteScreen
+import com.jsf.app.pravin.ui.screens.trainer.TrainerDashboardScreen
+import com.jsf.app.pravin.ui.screens.trainer.TrainerProfileSetupScreen
 import com.jsf.app.pravin.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -77,8 +82,9 @@ fun FitAIApp() {
 
     val currentUserId by prefs.currentUserId.collectAsStateWithLifecycle(initialValue = null)
     val isOnboardingDone by prefs.isOnboardingDone.collectAsStateWithLifecycle(initialValue = null)
+    val userRole by prefs.userRole.collectAsStateWithLifecycle(initialValue = null)
 
-    if (currentUserId == null || isOnboardingDone == null) {
+    if (currentUserId == null || isOnboardingDone == null || userRole == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = CyanPrimary)
         }
@@ -88,13 +94,17 @@ fun FitAIApp() {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
 
-    val bottomNavItems = listOf(
-        BottomNavItem("Home", Icons.Default.Home, Screen.Home),
-        BottomNavItem("Community", Icons.Default.Groups, Screen.Servers),
-        BottomNavItem("Workout", Icons.Default.SportsMartialArts, Screen.Workout),
-        BottomNavItem("Progress", Icons.Default.ShowChart, Screen.Progress),
-        BottomNavItem("Profile", Icons.Default.Person, Screen.Profile)
-    )
+    val isTrainer = userRole == "trainer"
+    val bottomNavItems = buildList {
+        add(BottomNavItem("Home", Icons.Default.Home, Screen.Home))
+        add(BottomNavItem("Community", Icons.Default.Groups, Screen.Servers))
+        add(BottomNavItem("Workout", Icons.Default.SportsMartialArts, Screen.Workout))
+        if (isTrainer) {
+            add(BottomNavItem("Clients", Icons.Default.Group, Screen.TrainerDashboard))
+        }
+        add(BottomNavItem("Progress", Icons.Default.ShowChart, Screen.Progress))
+        add(BottomNavItem("Profile", Icons.Default.Person, Screen.Profile))
+    }
 
     val startDestination = when {
         currentUserId!!.isEmpty() -> Screen.Auth.route
@@ -118,7 +128,10 @@ fun FitAIApp() {
             !currentRoute.orEmpty().startsWith("live_workout/") &&
             currentRoute != Screen.Friends.route &&
             currentRoute != Screen.Achievements.route &&
-            !currentRoute.orEmpty().startsWith("rep_battle/")
+            !currentRoute.orEmpty().startsWith("rep_battle/") &&
+            currentRoute != Screen.TrainerProfileSetup.route &&
+            currentRoute != Screen.ClientInvite.route &&
+            !currentRoute.orEmpty().startsWith("client_detail/")
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -192,8 +205,14 @@ fun FitAIApp() {
                             repository.saveProfile(profile)
                             prefs.setFitnessGoal(goals.fitnessGoal)
                             prefs.setWeeklyGoalSessions(goals.weeklyGoalSessions)
+                            prefs.setUserRole(profile.role)
                             prefs.setOnboardingDone(true)
-                            navController.navigate(Screen.Home.route) {
+                            val dest = if (profile.role == "trainer") {
+                                Screen.TrainerProfileSetup.route
+                            } else {
+                                Screen.Home.route
+                            }
+                            navController.navigate(dest) {
                                 popUpTo(Screen.Onboarding.route) { inclusive = true }
                             }
                         }
@@ -460,6 +479,52 @@ fun FitAIApp() {
                 val serverId = backStackEntry.arguments?.getString("serverId") ?: return@composable
                 LiveWorkoutScreen(
                     serverId = serverId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            // ── Trainer Dashboard ──────────────────────────────────────────────
+            composable(Screen.TrainerDashboard.route) {
+                TrainerDashboardScreen(
+                    onNavigateToClientDetail = { clientId ->
+                        navController.navigate(Screen.ClientDetail.createRoute(clientId))
+                    },
+                    onNavigateToInvite = {
+                        navController.navigate(Screen.ClientInvite.route)
+                    },
+                    onNavigateToProfile = {
+                        navController.navigate(Screen.TrainerProfileSetup.route)
+                    }
+                )
+            }
+
+            // ── Trainer Profile Setup ──────────────────────────────────────────
+            composable(Screen.TrainerProfileSetup.route) {
+                TrainerProfileSetupScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onSaved = {
+                        navController.navigate(Screen.TrainerDashboard.route) {
+                            popUpTo(Screen.TrainerProfileSetup.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            // ── Client Invite ──────────────────────────────────────────────────
+            composable(Screen.ClientInvite.route) {
+                ClientInviteScreen(onNavigateBack = { navController.popBackStack() })
+            }
+
+            // ── Client Detail ──────────────────────────────────────────────────
+            composable(
+                route = Screen.ClientDetail.route,
+                arguments = listOf(
+                    androidx.navigation.navArgument("clientId") { type = androidx.navigation.NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val clientId = backStackEntry.arguments?.getString("clientId") ?: return@composable
+                ClientDetailScreen(
+                    clientId = clientId,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

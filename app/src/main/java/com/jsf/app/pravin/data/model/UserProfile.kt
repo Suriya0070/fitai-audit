@@ -15,5 +15,6 @@ data class UserProfile(
     val gender: String = "Other",
     val bio: String = "",
     val avatarUrl: String = "",
+    val role: String = "athlete",
     val createdAt: Long = System.currentTimeMillis()
 )

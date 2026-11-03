@@ -31,7 +31,7 @@ import com.jsf.app.pravin.data.model.*
         ServerRole::class,
         RepFormRecord::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class FitnessDatabase : RoomDatabase() {
@@ -359,6 +359,12 @@ abstract class FitnessDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE user_profiles ADD COLUMN role TEXT NOT NULL DEFAULT 'athlete'")
+            }
+        }
+
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("""
@@ -383,7 +389,7 @@ abstract class FitnessDatabase : RoomDatabase() {
                     FitnessDatabase::class.java,
                     "fitness_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build().also { INSTANCE = it }
             }
     }
