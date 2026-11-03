@@ -14,4 +14,10 @@ interface UserProfileDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProfile(profile: UserProfile)
+
+    @Query("UPDATE user_profiles SET totalXp = totalXp + :xp, level = :newLevel WHERE id = 1")
+    suspend fun addXp(xp: Long, newLevel: Int)
+
+    @Query("SELECT * FROM user_profiles WHERE id = 1 LIMIT 1")
+    suspend fun getProfileSync(): UserProfile?
 }

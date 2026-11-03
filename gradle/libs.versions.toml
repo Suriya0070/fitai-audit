@@ -78,6 +78,7 @@ firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "fireb
 firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug" }
 firebase-messaging-ktx = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
 firebase-analytics-ktx = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
+firebase-vertexai = { group = "com.google.firebase", name = "firebase-vertexai" }
 # Google Sign-In
 play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 # Coil

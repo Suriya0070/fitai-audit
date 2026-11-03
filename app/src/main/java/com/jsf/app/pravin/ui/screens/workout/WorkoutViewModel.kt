@@ -24,6 +24,7 @@ import com.jsf.app.pravin.data.model.WorkoutSession
 import com.jsf.app.pravin.data.preferences.UserPreferences
 import com.jsf.app.pravin.data.repository.FitnessRepository
 import com.jsf.app.pravin.domain.*
+import com.jsf.app.pravin.domain.LevelUtil
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -300,7 +301,10 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             val userId = prefs.currentUserId.first()
             if (userId.isNotEmpty()) {
                 val allSessions = repository.allSessions.first()
+                val tracker = ConsistencyTracker()
+                val streak = tracker.calculateStreak(allSessions.map { it.timestamp })
                 checkAndAwardAchievements(savedSession, allSessions, userId)
+                awardXp(savedSession.totalScore, streak)
             }
             analytics.logEvent("workout_completed") {
                 param("exercise", savedSession.exerciseType)
@@ -366,6 +370,14 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             maybeAward(Achievement.AchievementType.PERFECT_SCORE, "Perfect Form", "Achieved a perfect score of 95+")
 
         if (earned.isNotEmpty()) _newAchievements.value = earned
+    }
+
+    private suspend fun awardXp(score: Float, streak: Int) {
+        val xp = LevelUtil.xpForWorkout(score, streak)
+        val profile = db.userProfileDao().getProfileSync() ?: return
+        val newTotalXp = profile.totalXp + xp
+        val newLevel = LevelUtil.levelFromXp(newTotalXp)
+        db.userProfileDao().addXp(xp, newLevel)
     }
 
     fun resetToIdle() {

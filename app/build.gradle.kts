@@ -121,6 +121,7 @@ dependencies {
     debugImplementation(libs.firebase.appcheck.debug)
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.analytics.ktx)
+    implementation(libs.firebase.vertexai)
     // Google Sign-In
     implementation(libs.play.services.auth)
     // Coroutines Play Services (for Firebase .await())

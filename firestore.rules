@@ -148,6 +148,19 @@ service cloud.firestore {
       }
     }
 
+    // ── Nutrition logs ────────────────────────────────────────────────────
+    match /nutritionLogs/{logId} {
+      // Owner can read/write their own logs
+      allow read, write: if isSignedIn() && resource == null
+        ? request.resource.data.userId == request.auth.uid
+        : resource.data.userId == request.auth.uid;
+      // Trainers can read logs of their active clients (trainerVisible must be true)
+      allow read: if isSignedIn() &&
+        resource.data.trainerVisible == true &&
+        exists(/databases/$(database)/documents/trainer_clients/$(request.auth.uid + '_' + resource.data.userId)) &&
+        get(/databases/$(database)/documents/trainer_clients/$(request.auth.uid + '_' + resource.data.userId)).data.status == 'active';
+    }
+
     // ── Workout sessions (synced for trainer access) ──────────────────────
     match /workoutSessions/{sessionId} {
       // Owner can read/write their own sessions

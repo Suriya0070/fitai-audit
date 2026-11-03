@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.SportsMartialArts
 import androidx.compose.material3.*
@@ -54,6 +55,7 @@ import com.jsf.app.pravin.ui.screens.trainer.ClientDetailScreen
 import com.jsf.app.pravin.ui.screens.trainer.ClientInviteScreen
 import com.jsf.app.pravin.ui.screens.trainer.TrainerDashboardScreen
 import com.jsf.app.pravin.ui.screens.trainer.TrainerProfileSetupScreen
+import com.jsf.app.pravin.ui.screens.nutrition.NutritionScreen
 import com.jsf.app.pravin.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -97,12 +99,12 @@ fun FitAIApp() {
     val isTrainer = userRole == "trainer"
     val bottomNavItems = buildList {
         add(BottomNavItem("Home", Icons.Default.Home, Screen.Home))
-        add(BottomNavItem("Community", Icons.Default.Groups, Screen.Servers))
         add(BottomNavItem("Workout", Icons.Default.SportsMartialArts, Screen.Workout))
+        add(BottomNavItem("Nutrition", Icons.Default.Restaurant, Screen.Nutrition))
+        add(BottomNavItem("Progress", Icons.Default.ShowChart, Screen.Progress))
         if (isTrainer) {
             add(BottomNavItem("Clients", Icons.Default.Group, Screen.TrainerDashboard))
         }
-        add(BottomNavItem("Progress", Icons.Default.ShowChart, Screen.Progress))
         add(BottomNavItem("Profile", Icons.Default.Person, Screen.Profile))
     }
 
@@ -482,6 +484,9 @@ fun FitAIApp() {
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
+            // ── Nutrition ─────────────────────────────────────────────────────
+            composable(Screen.Nutrition.route) { NutritionScreen() }
 
             // ── Trainer Dashboard ──────────────────────────────────────────────
             composable(Screen.TrainerDashboard.route) {

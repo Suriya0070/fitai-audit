@@ -40,6 +40,9 @@ sealed class Screen(val route: String) {
         fun createRoute(serverId: String) = "rep_battle/$serverId"
     }
 
+    // ── Nutrition ─────────────────────────────────────────────────────────
+    object Nutrition : Screen("nutrition")
+
     // ── Trainer Platform ──────────────────────────────────────────────────
     object TrainerDashboard : Screen("trainer_dashboard")
     object TrainerProfileSetup : Screen("trainer_profile_setup")

@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.jsf.app.pravin.data.model.*
+import com.jsf.app.pravin.data.model.NutritionLog
 
 @Database(
     entities = [
@@ -29,9 +30,10 @@ import com.jsf.app.pravin.data.model.*
         Reaction::class,
         Comment::class,
         ServerRole::class,
-        RepFormRecord::class
+        RepFormRecord::class,
+        NutritionLog::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class FitnessDatabase : RoomDatabase() {
@@ -55,6 +57,7 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun commentDao(): CommentDao
     abstract fun serverRoleDao(): ServerRoleDao
     abstract fun repFormRecordDao(): RepFormRecordDao
+    abstract fun nutritionLogDao(): NutritionLogDao
 
     companion object {
         @Volatile private var INSTANCE: FitnessDatabase? = null
@@ -382,6 +385,34 @@ abstract class FitnessDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE user_profiles ADD COLUMN totalXp INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE user_profiles ADD COLUMN level INTEGER NOT NULL DEFAULT 1")
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `nutrition_logs` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `mealType` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `imageUrl` TEXT NOT NULL,
+                        `aiStatus` TEXT NOT NULL DEFAULT 'none',
+                        `recognizedFoods` TEXT NOT NULL DEFAULT '[]',
+                        `estimatedCalories` INTEGER NOT NULL DEFAULT 0,
+                        `estimatedProteinG` REAL NOT NULL DEFAULT 0.0,
+                        `estimatedCarbsG` REAL NOT NULL DEFAULT 0.0,
+                        `estimatedFatG` REAL NOT NULL DEFAULT 0.0,
+                        `userOverrideCalories` INTEGER NOT NULL DEFAULT 0,
+                        `trainerVisible` INTEGER NOT NULL DEFAULT 1,
+                        `timestamp` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_nutrition_logs_userId` ON `nutrition_logs` (`userId`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_nutrition_logs_timestamp` ON `nutrition_logs` (`timestamp`)")
+            }
+        }
+
         fun getInstance(context: Context): FitnessDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -389,7 +420,7 @@ abstract class FitnessDatabase : RoomDatabase() {
                     FitnessDatabase::class.java,
                     "fitness_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build().also { INSTANCE = it }
             }
     }
